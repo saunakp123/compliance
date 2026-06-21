@@ -1,0 +1,1 @@
+{"theorem_name": "gold_ita_6_1", "def_name": "reg_6_1", "rule_id": "ICDR_6_1", "is_composite": false, "config": "ladder", "instance": "sample_taxpayer", "status": "proved", "tactic": "unfold reg_6_1; dsimp [sample_taxpayer]; omega", "phase": "ladder", "llm_rounds": 0, "time_s": 1.4, "error": null}

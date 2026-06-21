@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ITR>
+  <ITR2>
+    <PartAGEN1>
+      <PersonalInfo>
+        <PAN>ABCDE1234F</PAN>
+        <DOB>15/08/1985</DOB>
+        <FirstName>Arjun</FirstName>
+        <SurName>Sharma</SurName>
+      </PersonalInfo>
+      <ResidentialStatus>
+        <ResidentialStatusDrop>RES</ResidentialStatusDrop>
+        <DaysInIndia>365</DaysInIndia>
+      </ResidentialStatus>
+      <FilingStatus>
+        <OptingNewTaxRegime>N</OptingNewTaxRegime>
+        <ReturnFiledUnder>11</ReturnFiledUnder>
+      </FilingStatus>
+    </PartAGEN1>
+
+    <ScheduleCG>
+      <ShortTermCapGain15Per>
+        <EquityMFAmount>50000</EquityMFAmount>
+        <STTPaid>Y</STTPaid>
+      </ShortTermCapGain15Per>
+      <LongTermCapGain10Per>
+        <EquityMFAmount>200000</EquityMFAmount>
+        <STTPaidAcquisition>Y</STTPaidAcquisition>
+        <HoldingPeriodMonths>18</HoldingPeriodMonths>
+      </LongTermCapGain10Per>
+    </ScheduleCG>
+
+    <ScheduleOS>
+      <DividendGross>15000</DividendGross>
+      <IntrstFrmSavingBank>8000</IntrstFrmSavingBank>
+      <IntrstFrmTermDep>25000</IntrstFrmTermDep>
+    </ScheduleOS>
+
+    <ScheduleVIA>
+      <DeductUndChapVIA>
+        <Section80C>150000</Section80C>
+        <Section80DSelfFamily>20000</Section80DSelfFamily>
+      </DeductUndChapVIA>
+    </ScheduleVIA>
+
+    <TaxPaid>
+      <TaxesPaid>
+        <AdvanceTax>45000</AdvanceTax>
+        <TDSonSalary>30000</TDSonSalary>
+      </TaxesPaid>
+    </TaxPaid>
+
+    <PartBTTI>
+      <TotalIncome>1200000</TotalIncome>
+      <ComputationOfTaxLiability>
+        <TaxPayable>82500</TaxPayable>
+      </ComputationOfTaxLiability>
+      <Rebate87A>0</Rebate87A>
+    </PartBTTI>
+
+  </ITR2>
+</ITR>

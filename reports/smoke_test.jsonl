@@ -1,0 +1,1 @@
+{"theorem_name": "gold_reg_5_1_a", "def_name": "reg_5_1_a", "rule_id": "ICDR_5_1_A", "is_composite": false, "config": "ladder", "engine": "pantograph", "status": "proved", "tactic": "trivial", "phase": "ladder", "llm_rounds": 0, "time_s": 0.04, "error": null}

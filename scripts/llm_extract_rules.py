@@ -3,14 +3,20 @@
 """
 LLM-driven rule extractor for SEBI ICDR regulations.
 
-Usage:
+Usage (rules — default):
   python scripts/llm_extract_rules.py \
-      --pdf data/input/SEBI_ICDR_2018.pdf \
+      --pdf data/input/ICDR_rules_4_22.pdf \
       --out data/processed/rules_enriched.jsonl \
       --model qwen2.5:14b-instruct \
-      --window 2 --overlap 1 \
-      --judge --judge-model deepseek-r1:14b \
-      --timeout 600 --debug
+      --window 2 --overlap 1 --timeout 600 --debug
+
+Usage (Regulation 2 definitions):
+  python scripts/llm_extract_rules.py \
+      --mode definitions \
+      --pdf data/input/SEBI_ICDR_2018.pdf \
+      --out data/processed/definitions_icdr_reg2.jsonl \
+      --model qwen2.5:14b-instruct \
+      --window 2 --overlap 1 --timeout 600 --debug
 """
 
 from __future__ import annotations
@@ -49,6 +55,14 @@ from rule_extraction.metadata_enricher import (
     ICDRStructureLookup, enrich_batch,
 )
 from rule_extraction.rule_store import RuleStore
+from rule_extraction.definitions_extractor import (
+    extract_definitions_two_pass,
+    validate_definition,
+    attach_definition_source,
+    normalize_sub_clause,
+    definition_rule_id,
+    sub_clause_sort_key,
+)
 
 # Keep rule_refiner import as-is
 try:
@@ -98,6 +112,169 @@ def expand_detected_regs(
                 except Exception:
                     pass
     return expanded
+
+
+def run_definitions_extraction(args: argparse.Namespace) -> None:
+    """Extract Regulation 2 statutory definitions (--mode definitions)."""
+    pdf = Path(args.pdf)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    client = OllamaClient(timeout=args.timeout)
+    system_prefix = "/no_think\n" if args.no_think else ""
+
+    if args.debug_dir:
+        debug_dir = Path(args.debug_dir)
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        for fname in ["pass1_definitions_inventory.jsonl", "pass2_definitions.jsonl"]:
+            fpath = debug_dir / fname
+            if fpath.exists():
+                fpath.write_text("", encoding="utf-8")
+
+    existing_ids: set[str] = set()
+    if args.dedupe and out.exists():
+        for line in out.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                try:
+                    existing_ids.add(json.loads(line)["rule_id"])
+                except Exception:
+                    pass
+
+    pages = read_pdf_pages(pdf)
+    if args.max_pages and args.max_pages > 0:
+        pages = pages[:args.max_pages]
+
+    selected: dict[str, dict] = {}
+    order: list[str] = []
+    prev_last_sub_clause: str = ""
+
+    for start_idx, chunk in windowed(pages, args.window, args.overlap):
+        chunk_cleaned = [strip_page_numbers(p) for p in chunk]
+        chunk_no_footnotes: list[str] = []
+        for page_text in chunk_cleaned:
+            clean_text, _ = strip_footnotes_with_linkage(page_text, current_reg_context="2")
+            chunk_no_footnotes.append(clean_text)
+
+        visible = "\n\n--- PAGE BREAK ---\n\n".join(chunk_no_footnotes)
+        page_nums = list(range(start_idx + 1, start_idx + 1 + len(chunk)))
+
+        carryover_hint = ""
+        if prev_last_sub_clause:
+            carryover_hint = (
+                f"CONTINUATION HINT: The previous window ended inside Regulation 2 "
+                f"definitions at sub-clause ({prev_last_sub_clause}). "
+                f"Lettered items at the START of this window with no visible "
+                f'"2. Definitions" header are continuations — extract each as '
+                f"sub_clause letters following ({prev_last_sub_clause}), e.g. "
+                f'"(zb)" -> sub_clause "zb".\n'
+            )
+
+        items, inventory = extract_definitions_two_pass(
+            client,
+            args.model,
+            visible,
+            page_nums,
+            carryover_hint=carryover_hint,
+            system_prefix=system_prefix,
+            timeout=args.timeout,
+            debug=args.debug,
+        )
+
+        if inventory:
+            subs = [normalize_sub_clause(r.get("sub_clause", "")) for r in inventory if r.get("sub_clause")]
+            if subs:
+                prev_last_sub_clause = max(subs, key=sub_clause_sort_key)
+
+        if args.debug_dir and inventory:
+            with open(Path(args.debug_dir) / "pass1_definitions_inventory.jsonl", "a", encoding="utf-8") as f:
+                for inv in inventory:
+                    f.write(
+                        json.dumps(
+                            {
+                                "window_start": start_idx,
+                                "pages": page_nums,
+                                **inv,
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+
+        if not items:
+            continue
+
+        if args.debug_dir:
+            with open(Path(args.debug_dir) / "pass2_definitions.jsonl", "a", encoding="utf-8") as f:
+                for it in items:
+                    f.write(
+                        json.dumps(
+                            {
+                                "window_start": start_idx,
+                                "pages": page_nums,
+                                "rule_id": it.get("rule_id"),
+                                "term": it.get("term"),
+                                "definition_text": (it.get("definition_text") or "")[:300],
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            sc = normalize_sub_clause(it.get("sub_clause", "") or "")
+            if not sc:
+                m = re.match(r"^ICDR_2_([a-z]+)$", str(it.get("rule_id", "")))
+                sc = m.group(1) if m else ""
+            it["rule_id"] = definition_rule_id(sc) if sc else str(it.get("rule_id", ""))
+            attach_definition_source(it, pdf.name, page_nums, sc or "unknown")
+            if not validate_definition(it):
+                if args.debug:
+                    print(f"[DEBUG] dropping invalid definition: {it.get('rule_id')}", file=sys.stderr)
+                continue
+            if args.dedupe and it["rule_id"] in existing_ids:
+                continue
+            rid = it["rule_id"]
+            existing = selected.get(rid)
+            if existing is None:
+                selected[rid] = it
+                order.append(rid)
+            else:
+                if len(str(it.get("definition_text", ""))) > len(str(existing.get("definition_text", ""))):
+                    selected[rid] = it
+
+        time.sleep(0.1)
+
+    all_defs = [selected[k] for k in order]
+    if not all_defs:
+        print("No definitions extracted; writing nothing.", file=sys.stderr)
+        return
+
+    ts = datetime.utcnow().isoformat() + "Z"
+    for d in all_defs:
+        d["extraction_timestamp"] = ts
+        d["extraction_model"] = args.model
+        d.setdefault("regulation_framework", args.regulation_framework)
+
+    if args.debug_dir:
+        terms = sorted(all_defs, key=lambda x: sub_clause_sort_key(
+            normalize_sub_clause(re.sub(r"^ICDR_2_", "", str(x.get("rule_id", ""))))
+        ))
+        coverage = {
+            "mode": "definitions",
+            "total_definitions": len(all_defs),
+            "rule_ids": [d.get("rule_id") for d in all_defs],
+            "terms": [d.get("term") for d in all_defs],
+        }
+        (Path(args.debug_dir) / "coverage_summary.json").write_text(
+            json.dumps(coverage, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    store = RuleStore(out, mode="a" if args.append else "w")
+    written = store.write_batch(all_defs, dedupe=args.dedupe)
+    print(f"[DONE] Wrote {written} definitions -> {out}", file=sys.stderr)
 
 
 def is_carryover_exempt(rule: dict, carryover_hint: str, _allowed_regs: set[int]) -> bool:
@@ -175,7 +352,18 @@ def main():
         "--eval-gold", type=str, default="",
         help="Optional gold standard JSONL path; when set, rules not in gold are flagged needs_review.",
     )
+    ap.add_argument(
+        "--mode",
+        choices=["rules", "definitions"],
+        default="rules",
+        help="Extraction mode: 'rules' for numbered regulations (default), "
+             "'definitions' for Regulation 2 definition sub-clauses",
+    )
     args = ap.parse_args()
+
+    if args.mode == "definitions":
+        run_definitions_extraction(args)
+        return
 
     pdf = Path(args.pdf)
     out = Path(args.out)

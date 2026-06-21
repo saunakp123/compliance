@@ -1,0 +1,47 @@
+[
+  {
+    "label": "A: ladder",
+    "total": 28,
+    "proved": 25,
+    "pct": 89.28571428571429,
+    "sub_p": 20,
+    "sub_t": 20,
+    "comp_p": 5,
+    "comp_t": 8,
+    "phases": {
+      "ladder": 25
+    },
+    "avg_time_s": 8.93,
+    "llm_calls": 0
+  },
+  {
+    "label": "B: extended",
+    "total": 28,
+    "proved": 25,
+    "pct": 89.28571428571429,
+    "sub_p": 20,
+    "sub_t": 20,
+    "comp_p": 5,
+    "comp_t": 8,
+    "phases": {
+      "ladder": 25
+    },
+    "avg_time_s": 9.3,
+    "llm_calls": 0
+  },
+  {
+    "label": "C: qwen",
+    "total": 28,
+    "proved": 25,
+    "pct": 89.28571428571429,
+    "sub_p": 20,
+    "sub_t": 20,
+    "comp_p": 5,
+    "comp_t": 8,
+    "phases": {
+      "ladder": 25
+    },
+    "avg_time_s": 9.08,
+    "llm_calls": 3
+  }
+]

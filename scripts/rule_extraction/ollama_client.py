@@ -77,6 +77,8 @@ def coerce_rules_from_parsed(obj: Any) -> list[dict]:
     if isinstance(obj, dict):
         if "clauses" in obj and isinstance(obj["clauses"], list):
             return [x for x in obj["clauses"] if isinstance(x, dict)]
+        if "definitions" in obj and isinstance(obj["definitions"], list):
+            return [x for x in obj["definitions"] if isinstance(x, dict)]
         if "rules" in obj and isinstance(obj["rules"], list):
             return [x for x in obj["rules"] if isinstance(x, dict)]
         if "items" in obj and isinstance(obj["items"], list):

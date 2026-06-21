@@ -1,0 +1,1 @@
+{"theorem_name": "gold_reg_5_1_a", "def_name": "reg_5_1_a", "rule_id": "ICDR_5_1_A", "is_composite": false, "config": "ladder", "engine": "leandojo", "status": "unproved", "tactic": null, "phase": null, "llm_rounds": 0, "time_s": 5.62, "error": "'str' object has no attribute 'name'"}
