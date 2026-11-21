@@ -9,7 +9,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REGLIB="$REPO_ROOT/Reglib"
-WIN_HOME="/mnt/c/Users/sauna"
+WIN_HOME="${WIN_HOME:-/mnt/c/Users/$USER}"
 
 export PATH="$HOME/.elan/bin:$PATH"
 

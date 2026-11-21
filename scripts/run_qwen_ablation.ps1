@@ -1,7 +1,9 @@
 # Run full Qwen ablation in WSL (Ollama on Windows via PowerShell proxy).
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-$WslRoot = "/mnt/c/Users/sauna/OneDrive - University Of Houston/UHDSI/Compliance Project/compliance"
+$drive = ($Root.Substring(0,1)).ToLower()
+$rest = ($Root.Substring(2) -replace '\\','/')
+$WslRoot = "/mnt/$drive$rest"
 $Cmd = @"
 set -euo pipefail
 export OLLAMA_USE_WINDOWS_PROXY=1

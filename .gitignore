@@ -1,16 +1,29 @@
 # Lean / Lake
 .lake/
+**/.lake/
 *.olean
 *.olean-db
 lake-manifest.json
+build/
 
 # Python
 __pycache__/
 *.pyc
 .venv/
 .venv-wsl/
+venv/
 wvenv/
 .env
+*.env
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+
+# Model weights / checkpoints (never commit)
+*.ckpt
+*.bin
+*.safetensors
 
 # Local IDE / agent config
 .claude/

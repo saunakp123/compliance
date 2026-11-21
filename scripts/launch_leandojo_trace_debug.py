@@ -5,7 +5,16 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-WSL_ROOT = "/mnt/c/Users/sauna/OneDrive - University Of Houston/UHDSI/Compliance Project/compliance"
+def _wsl_repo_root() -> str:
+    root = Path(__file__).resolve().parents[1]
+    s = str(root)
+    if len(s) >= 2 and s[1] == ":":
+        return f"/mnt/{s[0].lower()}{s[2:].replace(chr(92), '/')}"
+    return s.replace(chr(92), "/")
+
+
+
+WSL_ROOT = _wsl_repo_root()
 RUN_SH = Path(__file__).resolve().parent / ".run_leandojo_trace_debug.sh"
 
 SCRIPT = f"""#!/usr/bin/env bash
