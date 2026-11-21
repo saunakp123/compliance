@@ -7,7 +7,7 @@ namespace Reglib.ITA.Rules
 
 open Reglib.ITA
 
-/-! ## Regulation 112a -/
+/-! ## Regulation 112A -/
 /-- Reg 112A(1): Where the total income of an assessee includes any income chargeable under the head capital gains, arising from the tran... -/
 def reg_112a_1 (issuer : Taxpayer) : Prop :=
   issuer.ltcg_listed_equity_amount ≥ 0  -- TODO: set correct threshold
@@ -26,8 +26,8 @@ def reg_112a_holding (issuer : Taxpayer) : Prop :=
 def reg_112a_stt_acquisition (issuer : Taxpayer) : Prop :=
   issuer.is_stt_paid_at_acquisition = true
 
-/-- Combined Regulation 112a gate -/
-def reg_112a_eligible (issuer : Taxpayer) : Prop :=
+/-- Combined Regulation 112A gate -/
+def reg_112A_eligible (issuer : Taxpayer) : Prop :=
   reg_112a_1 issuer
   ∧ reg_112a_holding issuer
   ∧ reg_112a_stt_acquisition issuer
@@ -36,6 +36,6 @@ def reg_112a_eligible (issuer : Taxpayer) : Prop :=
 /-! ## Composite Chapter XII Part II Gate -/
 
 def chapter12_part2_eligible (issuer : Taxpayer) : Prop :=
-  reg_112a_eligible issuer
+  reg_112A_eligible issuer
 
 end Reglib.ITA.Rules

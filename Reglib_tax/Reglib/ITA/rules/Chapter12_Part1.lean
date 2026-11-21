@@ -7,7 +7,7 @@ namespace Reglib.ITA.Rules
 
 open Reglib.ITA
 
-/-! ## Regulation 111a -/
+/-! ## Regulation 111A -/
 /-- Reg 111A(1): Where the total income of an assessee includes any income chargeable under the head capital gains, arising from the tran... -/
 def reg_111a_1 (issuer : Taxpayer) : Prop :=
   issuer.is_stt_paid_on_transfer = true
@@ -18,14 +18,14 @@ def reg_111a_1 (issuer : Taxpayer) : Prop :=
 def reg_111a_stt_check (issuer : Taxpayer) : Prop :=
   issuer.is_stt_paid_on_transfer = true
 
-/-- Combined Regulation 111a gate -/
-def reg_111a_eligible (issuer : Taxpayer) : Prop :=
+/-- Combined Regulation 111A gate -/
+def reg_111A_eligible (issuer : Taxpayer) : Prop :=
   reg_111a_1 issuer
   ∧ reg_111a_stt_check issuer
 
 /-! ## Composite Chapter XII Part I Gate -/
 
 def chapter12_part1_eligible (issuer : Taxpayer) : Prop :=
-  reg_111a_eligible issuer
+  reg_111A_eligible issuer
 
 end Reglib.ITA.Rules

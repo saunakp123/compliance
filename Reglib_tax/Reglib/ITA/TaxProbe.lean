@@ -4,6 +4,7 @@
 -- Contains one sorry theorem per gold-standard rule with real predicates.
 -- The APOLLO verify_one.py loop fills in the proofs automatically.
 
+import Reglib.ITA.instances.SampleTaxpayer
 import Reglib.ITA.rules.Compliance
 import Reglib.ITA.rules.Chapter1_Part1
 import Reglib.ITA.rules.Chapter8_Part1
@@ -138,24 +139,47 @@ theorem gold_reg_139_eligible : reg_139_eligible sample_taxpayer := by
 theorem gold_reg_194_eligible : reg_194_eligible sample_taxpayer := by
   sorry
 
-/-- Composite gate: reg_111a_eligible = reg_111a_1, reg_111a_stt_check -/
-theorem gold_reg_111a_eligible : reg_111a_eligible sample_taxpayer := by
+/-- Composite gate: reg_111A_eligible = reg_111a_1, reg_111a_stt_check -/
+theorem gold_reg_111a_eligible : reg_111A_eligible sample_taxpayer := by
   sorry
 
-/-- Composite gate: reg_112a_eligible = reg_112a_1, reg_112a_holding, reg_112a_stt_acquisition, reg_112a_exemption -/
-theorem gold_reg_112a_eligible : reg_112a_eligible sample_taxpayer := by
+/-- Composite gate: reg_112A_eligible = reg_112a_1, reg_112a_holding, reg_112a_stt_acquisition, reg_112a_exemption -/
+theorem gold_reg_112a_eligible : reg_112A_eligible sample_taxpayer := by
   sorry
 
 /-- Composite gate: reg_194a_eligible = reg_194a_1_bank, reg_194a_senior_citizen -/
 theorem gold_reg_194a_eligible : reg_194a_eligible sample_taxpayer := by
   sorry
 
-/-- Composite gate: reg_80d_eligible = reg_80d_1, reg_80d_senior -/
-theorem gold_reg_80d_eligible : reg_80d_eligible sample_taxpayer := by
+/-- Composite gate: reg_80D_eligible = reg_80d_1, reg_80d_senior -/
+theorem gold_reg_80d_eligible : reg_80D_eligible sample_taxpayer := by
   sorry
 
-/-- Composite gate: reg_87a_eligible = reg_87a_rebate, reg_87a_new_regime -/
-theorem gold_reg_87a_eligible : reg_87a_eligible sample_taxpayer := by
+/-- Composite gate: reg_87A_eligible = reg_87a_rebate, reg_87a_new_regime -/
+theorem gold_reg_87a_eligible : reg_87A_eligible sample_taxpayer := by
+  sorry
+
+/-! ## Branch-rule negations (real sample: non-senior, old regime)
+
+These four positive branch rules fail on `sample_taxpayer` because their
+predicates require `is_senior_citizen = true` / `is_new_tax_regime = true`.
+The matching `_negated` predicates are the De Morgan duals and should prove.
+-/
+
+theorem gold_ita_194a_senior_citizen_negated :
+    reg_194a_senior_citizen_negated sample_taxpayer := by
+  sorry
+
+theorem gold_reg_194a_eligible_negated :
+    reg_194a_eligible_negated sample_taxpayer := by
+  sorry
+
+theorem gold_ita_87a_new_regime_negated :
+    reg_87a_new_regime_negated sample_taxpayer := by
+  sorry
+
+theorem gold_reg_87a_eligible_negated :
+    reg_87A_eligible_negated sample_taxpayer := by
   sorry
 
 end Reglib.ITA.Rules

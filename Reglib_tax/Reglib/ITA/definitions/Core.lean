@@ -40,6 +40,8 @@ structure Taxpayer where
   days_in_india_fy                                 : Nat
   /-- Reg 194(1) (maps_to inference) -/
   dividend_income_amount                           : Nat
+  /-- Reg 194(1) TDS threshold (FY 2024–25: Rs. 5,000) -/
+  dividend_tds_threshold                           : Nat
   /-- Reg 80D(1) (maps_to inference) -/
   health_insurance_premium_amount                  : Nat
   /-- Reg 112A(holding) (maps_to inference) -/

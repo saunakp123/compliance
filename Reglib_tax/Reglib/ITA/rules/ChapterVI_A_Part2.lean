@@ -7,7 +7,7 @@ namespace Reglib.ITA.Rules
 
 open Reglib.ITA
 
-/-! ## Regulation 80d -/
+/-! ## Regulation 80D -/
 /-- Reg 80D(1): In computing the total income of an assessee, being an individual or a Hindu undivided family, there shall be deducted s... -/
 def reg_80d_1 (issuer : Taxpayer) : Prop :=
   issuer.health_insurance_premium_amount ≥ 0  -- TODO: set correct threshold
@@ -17,14 +17,14 @@ def reg_80d_1 (issuer : Taxpayer) : Prop :=
 def reg_80d_senior (issuer : Taxpayer) : Prop :=
   issuer.max_80d_deduction_senior ≥ 0  -- TODO: set correct threshold
 
-/-- Combined Regulation 80d gate -/
-def reg_80d_eligible (issuer : Taxpayer) : Prop :=
+/-- Combined Regulation 80D gate -/
+def reg_80D_eligible (issuer : Taxpayer) : Prop :=
   reg_80d_1 issuer
   ∧ reg_80d_senior issuer
 
 /-! ## Composite Chapter VI-A Part II Gate -/
 
 def chapterVI_A_part2_eligible (issuer : Taxpayer) : Prop :=
-  reg_80d_eligible issuer
+  reg_80D_eligible issuer
 
 end Reglib.ITA.Rules

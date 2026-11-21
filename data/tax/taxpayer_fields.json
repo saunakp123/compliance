@@ -16,6 +16,7 @@
   "ltcg_exempt_limit": 125000,
   "ltcg_tax_rate_pct_x10": 125,
   "dividend_income_amount": 15000,
+  "dividend_tds_threshold": 5000,
   "tds_rate_194_dividend_pct": 10,
   "tds_rate_no_pan_pct": 20,
   "interest_income_bank_amount": 33000,

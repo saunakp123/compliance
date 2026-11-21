@@ -19,10 +19,23 @@ def reg_194a_senior_citizen (issuer : Taxpayer) : Prop :=
   issuer.is_senior_citizen = true
   ∧ issuer.interest_threshold_senior_bank ≥ 0  -- TODO: set correct threshold
 
+/-- Symmetric negation of `reg_194a_senior_citizen` (De Morgan). -/
+def reg_194a_senior_citizen_negated (issuer : Taxpayer) : Prop :=
+  issuer.is_senior_citizen = false
+  ∨ issuer.interest_threshold_senior_bank < 0
+
 /-- Combined Regulation 194a gate -/
 def reg_194a_eligible (issuer : Taxpayer) : Prop :=
   reg_194a_1_bank issuer
   ∧ reg_194a_senior_citizen issuer
+
+/-- Symmetric negation of `reg_194a_eligible` (De Morgan over sub-clauses; inlined for decide/simp). -/
+def reg_194a_eligible_negated (issuer : Taxpayer) : Prop :=
+  (issuer.interest_income_bank_amount < 0
+   ∨ issuer.interest_threshold_bank < 0
+   ∨ issuer.tds_rate_194a_pct < 0)
+  ∨ (issuer.is_senior_citizen = false
+     ∨ issuer.interest_threshold_senior_bank < 0)
 
 /-! ## Composite Chapter XVII Part II Gate -/
 

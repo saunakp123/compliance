@@ -7,7 +7,7 @@ namespace Reglib.ITA.Rules
 
 open Reglib.ITA
 
-/-! ## Regulation 80c -/
+/-! ## Regulation 80C -/
 /-- Reg 80C(1): In computing the total income of an assessee, being an individual or a Hindu undivided family, there shall be deducted, ... -/
 def reg_80c_1 (issuer : Taxpayer) : Prop :=
   issuer.investment_80c_amount ≥ 0  -- TODO: set correct threshold
@@ -15,7 +15,7 @@ def reg_80c_1 (issuer : Taxpayer) : Prop :=
 
 /-! ## Composite Chapter VI-A Part I Gate -/
 
-def chapterVI_A_part1_eligible (issuer : Taxpayer) : Prop :=
+def chapterVI_A_part1_eligible (_issuer : Taxpayer) : Prop :=
   True
 
 end Reglib.ITA.Rules

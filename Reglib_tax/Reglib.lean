@@ -12,3 +12,4 @@ import Reglib.ITA.rules.ChapterXVII_Part1
 import Reglib.ITA.rules.ChapterVI_A_Part2
 import Reglib.ITA.rules.ChapterXVII_Part2
 import Reglib.ITA.rules.Compliance
+import Reglib.ITA.AdversarialRules
