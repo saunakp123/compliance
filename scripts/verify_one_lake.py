@@ -126,10 +126,14 @@ def load_definitions(path: Path) -> dict[str, dict]:
     return defs
 
 
-def parse_probe_theorems(probe_path: Path, instance_name: str) -> list[dict]:
+def parse_probe_theorems(probe_path: Path, instance_name: str | None = None) -> list[dict]:
     """
     Parse a probe .lean file and extract theorem metadata.
-    Works for both GoldProbe (sample_compliant_issuer) and TaxProbe (sample_taxpayer).
+    Works for GoldProbe, TaxProbe, and AdversarialProbe.
+
+    If instance_name is given, only theorems over that instance are kept.
+    If None, every gold_* theorem is kept and each theorem's instance is
+    taken from the statement (needed for adversarial probes with 5 instances).
     """
     content = probe_path.read_text(encoding="utf-8")
 
@@ -142,13 +146,17 @@ def parse_probe_theorems(probe_path: Path, instance_name: str) -> list[dict]:
         composite_subs[gate] = subs
 
     theorems = []
+    # theorem gold_X : def_name instance_name := by
     pattern = re.compile(
-        rf"theorem\s+(gold_\w+)\s*:\s*(\w+)\s+{re.escape(instance_name)}\s*:=\s*by",
+        r"theorem\s+(gold_\w+)\s*:\s*(\w+)\s+(\w+)\s*:=\s*by",
         re.MULTILINE,
     )
     for m in pattern.finditer(content):
         thm_name = m.group(1)
         def_name = m.group(2)
+        inst     = m.group(3)
+        if instance_name is not None and inst != instance_name:
+            continue
         is_comp  = def_name in composite_subs
         # Best-effort rule_id reconstruction
         rule_id = (
@@ -158,14 +166,76 @@ def parse_probe_theorems(probe_path: Path, instance_name: str) -> list[dict]:
             .upper()
         )
         theorems.append({
-            "theorem_name": thm_name,
-            "def_name":     def_name,
-            "is_composite": is_comp,
-            "sub_clauses":  composite_subs.get(def_name, []),
-            "rule_id":      rule_id,
+            "theorem_name":  thm_name,
+            "def_name":      def_name,
+            "instance_name": inst,
+            "is_composite":  is_comp,
+            "sub_clauses":   composite_subs.get(def_name, []),
+            "rule_id":       rule_id,
+            "is_negated":    thm_name.endswith("_negated") or def_name.endswith("_negated"),
         })
 
     return theorems
+
+
+def adversarial_case_id(thm_name: str) -> str:
+    """gold_adv_01_ltcg_boundary[_negated] → adv_01_ltcg_boundary"""
+    name = thm_name
+    if name.startswith("gold_"):
+        name = name[len("gold_"):]
+    if name.endswith("_negated"):
+        name = name[: -len("_negated")]
+    return name
+
+
+def derive_adversarial_verdicts(results: list[dict]) -> list[dict]:
+    """
+    Collapse positive/negated theorem pairs into one verdict per case.
+    Positive proved  → verdict True
+    Negated proved   → verdict False
+    Neither / both   → verdict None (bug in setup)
+    """
+    by_id: dict[str, dict] = {}
+    for rec in results:
+        case_id = adversarial_case_id(rec["theorem_name"])
+        slot = by_id.setdefault(case_id, {
+            "id": case_id,
+            "positive_proved": False,
+            "negated_proved": False,
+            "positive_tactic": None,
+            "negated_tactic": None,
+            "theorem_name": None,
+            "def_name": None,
+        })
+        if rec.get("is_negated") or rec["theorem_name"].endswith("_negated"):
+            if rec["status"] == "proved":
+                slot["negated_proved"] = True
+                slot["negated_tactic"] = rec.get("tactic")
+        else:
+            slot["theorem_name"] = rec["theorem_name"]
+            slot["def_name"] = rec.get("def_name")
+            if rec["status"] == "proved":
+                slot["positive_proved"] = True
+                slot["positive_tactic"] = rec.get("tactic")
+
+    out = []
+    for case_id, slot in by_id.items():
+        if slot["positive_proved"] and not slot["negated_proved"]:
+            verdict = True
+        elif slot["negated_proved"] and not slot["positive_proved"]:
+            verdict = False
+        else:
+            verdict = None
+        out.append({
+            "id": case_id,
+            "verdict": verdict,
+            "positive_proved": slot["positive_proved"],
+            "negated_proved": slot["negated_proved"],
+            "positive_tactic": slot["positive_tactic"],
+            "negated_tactic": slot["negated_tactic"],
+            "status": "ok" if verdict is not None else "ambiguous",
+        })
+    return out
 
 
 # ── Lake oracle ───────────────────────────────────────────────────────────────
@@ -195,6 +265,22 @@ class LakeOracle:
         rc, _ = self._lake_build()
         if rc != 0:
             print(f"[oracle] WARNING: initial build returned {rc} — check for errors")
+
+        # Prefer the project-pinned toolchain (lean-toolchain via lake env),
+        # not bare `lean --version` which can report a different elan default.
+        self.lean_version = None
+        try:
+            ver = subprocess.run(
+                ["lake", "env", "lean", "--version"],
+                cwd=self.reglib_dir,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            lines = (ver.stdout or "").strip().splitlines()
+            self.lean_version = lines[0] if lines else None
+        except Exception:
+            self.lean_version = None
 
     def _lake_build(self) -> tuple[int, str]:
         result = subprocess.run(
@@ -318,6 +404,8 @@ def prove_theorem(
         "llm_rounds":   0,
         "time_s":       0.0,
         "error":        None,
+        "lean_version": getattr(oracle, "lean_version", None),
+        "source":       "lake_kernel",
     }
 
     t0 = time.time()
@@ -334,7 +422,17 @@ def prove_theorem(
         f"unfold {def_name}; simp [{instance_name}]",
         f"unfold {def_name}; simp [{instance_name}]; omega",
         f"unfold {def_name}; decide",
+        f"unfold {def_name}; native_decide",
+        f"unfold {def_name}; simp [{instance_name}]; decide",
+        f"unfold {def_name}; left; simp [{instance_name}]",
+        f"unfold {def_name}; right; simp [{instance_name}]",
+        f"unfold {def_name}; left; simp [{instance_name}]; omega",
+        f"unfold {def_name}; right; simp [{instance_name}]; omega",
+        f"unfold {def_name}; constructor <;> simp [{instance_name}]",
+        f"unfold {def_name}; constructor <;> (simp [{instance_name}]; try omega)",
         f"simp [{def_name}, {instance_name}]",
+        f"decide",
+        f"native_decide",
     ] + base_ladder
 
     try:
@@ -400,34 +498,54 @@ def prove_theorem(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--reglib",          required=True,  type=Path)
-    parser.add_argument("--probe",           required=True,  type=Path)
+    parser.add_argument("--probe",           type=Path, default=None,
+                        help="Probe .lean file (default depends on --adversarial)")
     parser.add_argument("--rules",           required=True,  type=Path)
     parser.add_argument("--defs",            required=True,  type=Path)
     parser.add_argument("--instance-name",   default="sample_compliant_issuer",
                         help="Lean instance name used in theorems "
-                             "(sample_compliant_issuer for ICDR, sample_taxpayer for ITA)")
+                             "(sample_compliant_issuer for ICDR, sample_taxpayer for ITA). "
+                             "Ignored under --adversarial (per-theorem instances).")
     parser.add_argument("--config",          default="ladder",
                         choices=["ladder", "extended", "qwen"])
     parser.add_argument("--out",             required=True,  type=Path)
     parser.add_argument("--max-llm-rounds",  type=int, default=3)
     parser.add_argument("--only",            type=str, default=None,
                         help="Comma-separated theorem names for smoke test")
+    parser.add_argument(
+        "--adversarial",
+        action="store_true",
+        help="Run adversarial ITR-2 cases: use AdversarialProbe, "
+             "prove positive+negated pairs, emit per-case True/False verdicts.",
+    )
     args = parser.parse_args()
+
+    if args.adversarial and args.probe is None:
+        args.probe = args.reglib / "Reglib" / "ITA" / "AdversarialProbe.lean"
+    if args.probe is None:
+        parser.error("--probe is required unless --adversarial is set")
 
     instance_name = args.instance_name
 
     rules_db = load_rules(args.rules)
     defs_db  = load_definitions(args.defs)
-    theorems = parse_probe_theorems(args.probe, instance_name)
+    # Adversarial probe uses a different instance per theorem
+    theorems = parse_probe_theorems(
+        args.probe,
+        instance_name=None if args.adversarial else instance_name,
+    )
 
     if args.only:
         only_set = set(args.only.split(","))
         theorems = [t for t in theorems if t["theorem_name"] in only_set]
 
-    print(f"[verify_one_lake] Config:    {args.config}")
-    print(f"[verify_one_lake] Instance:  {instance_name}")
-    print(f"[verify_one_lake] Theorems:  {len(theorems)}")
-    print(f"[verify_one_lake] Reglib:    {args.reglib}")
+    print(f"[verify_one_lake] Config:      {args.config}")
+    print(f"[verify_one_lake] Adversarial: {args.adversarial}")
+    print(f"[verify_one_lake] Instance:    "
+          f"{'per-theorem' if args.adversarial else instance_name}")
+    print(f"[verify_one_lake] Theorems:    {len(theorems)}")
+    print(f"[verify_one_lake] Reglib:      {args.reglib}")
+    print(f"[verify_one_lake] Probe:       {args.probe}")
 
     oracle = LakeOracle(args.probe.resolve(), args.reglib.resolve())
 
@@ -438,11 +556,14 @@ def main() -> None:
     try:
         with open(args.out, "w", encoding="utf-8") as fout:
             for i, thm in enumerate(theorems):
-                print(f"\n[{i+1}/{len(theorems)}] {thm['theorem_name']}")
+                inst = thm.get("instance_name") or instance_name
+                print(f"\n[{i+1}/{len(theorems)}] {thm['theorem_name']}  ({inst})")
                 rec = prove_theorem(
                     oracle, thm, rules_db, defs_db,
-                    args.config, instance_name, args.max_llm_rounds,
+                    args.config, inst, args.max_llm_rounds,
                 )
+                rec["is_negated"] = thm.get("is_negated", False)
+                rec["case_id"] = adversarial_case_id(thm["theorem_name"]) if args.adversarial else None
                 results.append(rec)
                 fout.write(json.dumps(rec) + "\n")
                 fout.flush()
@@ -452,6 +573,13 @@ def main() -> None:
                     print(f"  OK {rec['phase']}: {rec['tactic']}")
                 else:
                     print(f"  X unproved")
+
+            # Under --adversarial, append collapsed per-case verdicts
+            if args.adversarial:
+                for vrec in derive_adversarial_verdicts(results):
+                    fout.write(json.dumps(vrec) + "\n")
+                    print(f"[verdict] {vrec['id']}: {vrec['verdict']} "
+                          f"(pos={vrec['positive_proved']} neg={vrec['negated_proved']})")
     finally:
         oracle.restore()
 
@@ -464,7 +592,7 @@ def main() -> None:
 
     print(f"\n{'='*55}")
     print(f"Config:      {args.config}")
-    print(f"Instance:    {instance_name}")
+    print(f"Instance:    {'per-theorem' if args.adversarial else instance_name}")
     print(f"Proved:      {proved}/{total}  ({pct:.1f}%)")
     print(f"Phases:      {dict(phases)}")
     print(f"Sub-clauses: {proved - comp_p}/{total - comp_t}")
