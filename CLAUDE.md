@@ -92,24 +92,88 @@ v6, that is a regression and must be investigated before proceeding.
 
 ---
 
-## Current Scores (as of May 2026)
+## Current Scores (as of Aug 22, 2026)
 
 | Version | TP | FN | FP | Recall | Precision | F1 |
 |---------|----|----|-----|--------|-----------|-----|
 | v5 | 92 | 51 | 26 | 64.3% | 78.0% | 70.5% |
 | **v6 (baseline)** | **100** | **43** | **3** | **69.9%** | **97.1%** | **81.3%** |
 | v7 (regression) | 88 | 55 | 25 | 61.5% | 77.9% | 68.8% |
+| **v8** | — | — | — | — | — | **not scored** (extract in progress; see Current State) |
 | **v8 target** | **~136** | **~7** | **~0** | **>90%** | **>95%** | **>95%** |
 
 **Clean regulations in v6 (do not break these):** 4, 9, 13, 18, 19, 20, 21, 22, 23
 
 ---
 
+## Current State (Aug 23, 2026)
+
+**Focus:** ICDR v8 extract re-run in progress (Aug 23). Priority 1–7 code fixes in tree; v8 still unscored until extract completes.
+
+**Code status — all Priority fixes are now in the codebase:**
+
+| Priority | Fix | Status |
+|----------|-----|--------|
+| 1 | Raise clause truncation to 1200 (+ debug dump) | **DONE** — extraction path + `pass2_pre_judge.jsonl` dump uses `[:1200]` |
+| 2 | `split_merged_lettered_items` emit parent first | **DONE** — `scripts/rule_extraction/regulation_identifier.py` |
+| 3 | “No phantom sub-levels” in `_PASS1_SYSTEM` | **DONE** — same file |
+| 4 | Carryover hint before `reg_context` | **DONE** (earlier) |
+| 5 | Strip terminal `([a-e])` on carryover | **DONE** (earlier) |
+| 6 | `dedup_pass2_entries` before Pass 2 | **DONE** — `rule_extractor.extract_rules_two_pass` + secondary call in `llm_extract_rules.py` |
+| 7 | `expand_detected_regs` with string regs | **DONE** (earlier) |
+
+**v8 extraction — IN PROGRESS (Aug 23, 2026):**
+
+**Environment fixed:**
+- `.venv` → Python **3.12.10** (`C:\Users\sauna\AppData\Local\Programs\Python\Python312`), `pip install -r requirements.txt` OK, `import requests` OK
+- Ollama **0.32.15** at `%LOCALAPPDATA%\Programs\Ollama\ollama.exe`; API `http://127.0.0.1:11434` up; **`qwen2.5:14b-instruct`** present
+
+**Extract status:** Two agent-shell runs crashed (exit `-1`, ~66–93 min each) on Ollama read timeouts (`--timeout 600`) with competing parallel extracts. Detached run reached window `start=6` before dying. **Active re-run** (Aug 23 ~13:35): cmd-wrapped `.venv\Scripts\python.exe` with **`--timeout 1800`**, logs → `data/processed/debug_refactored_v8/extract_final.{out,err}.log`. Monitor: `Select-String extract_final.err.log "window start="`. **`rules_refactored_v8.jsonl` not written yet** (output at end of run). No `--resume` — full re-run only.
+
+Prior pause note: `docs/decision_log/2026-08-23_pause-icdr-v8-focus-tax.md` (tax focus was interim; ICDR re-run resumed).
+
+**Intended commands (full re-run when ICDR resumes — not true resume):**
+
+```bash
+python scripts/llm_extract_rules.py \
+  --pdf data/input/ICDR_rules_4_22.pdf \
+  --out data/processed/rules_refactored_v8.jsonl \
+  --model qwen2.5:14b-instruct \
+  --window 2 --overlap 1 \
+  --reg-filter 4 23 \
+  --timeout 1800 \
+  --debug \
+  --debug-dir data/processed/debug_refactored_v8
+
+python scripts/score_extraction.py \
+  --extracted data/processed/rules_refactored_v8.jsonl \
+  --gold data/gold_standard/gold_standard_regs_4_23.jsonl \
+  --baseline data/processed/rules_refactored_v6.jsonl \
+  --output data/reports/v8_score_report.json
+```
+
+No scored `rules_refactored_v8.jsonl` / `v8_score_report.json` yet. Post-score verification checks (truncation@300, phantom levels, Reg 8 IDs) not run.
+
+---
+
+## Paper / Tax Track (Oct 3, 2026 — active focus)
+
+**Paper scope:** Stage-4 architecture narrative; **ITA/ITR-2 is the E2E demo**; full ICDR RHP→Lean E2E deferred. Framing Option B (Lean + LLM judge complementary). Details: `docs/Compliance_context.md` §0.
+
+**Adversarial experiment (expanded 2026-10-03; kernel 2026-10-03):** **17 cases**, FY **2024–25**. Lean **kernel-checked** via `verify_one_lake.py --adversarial` on Lean **4.28.0** → `reports/adversarial_lean_results_kernel_2026-10.jsonl` (**17/17** case verdicts; 17/34 theorems; exactly one of pos/neg each). Qwen2.5:14b temp0/k5 **15/17**. Misses: `adv_11`, `adv_14_194_tds_applies`. 32b skipped (8 GB VRAM). Tables: `adversarial_comparison_full.jsonl` + kernel file. Decision logs: `2026-10-03_adversarial-expansion-fy2024-25.md`, `2026-10-03_adversarial-kernel-prove.md`.
+
+**ITA gold ablation (closed branch gap 2026-10-03):** Real `sample_taxpayer` → **21/28** + **4/4** branch negations (`proof_results_tax_branch_negations_2026-10.jsonl`). Twin `sample_taxpayer_senior_new` (only senior + new-regime flags flipped) → **25/28** (`proof_results_tax_ladder_senior_new_2026-10.jsonl`) — recovers the four branch positives; still open composites **6 / 112A / 80D**. See `docs/decision_log/2026-10-03_tax-ablation-rerun-after-core-fix.md`, `2026-10-03_taxprobe-branch-negations-and-senior-instance.md`.
+
+**Decision log:** `docs/decision_log/` — append dated markdown entries for scope/architecture decisions. Do not rely on chat history alone.
+
+---
+
 ## v8 Work Plan — Apply In This Order
 
 Apply each fix, run scoring, confirm no regressions before moving to the next.
+*(All Priority code fixes below are implemented as of Aug 22, 2026. Remaining work is the blocked extract + score run.)*
 
-### Priority 1 — Find ALL truncation caps (Zero risk, highest yield)
+### Priority 1 — Find ALL truncation caps (Zero risk, highest yield) — DONE
 
 **Problem confirmed:** `ICDR_14_b` (len=300) and `ICDR_14_4` (len=300) appear at
 exactly 300 chars in `pass2_pre_judge.jsonl` even in v7 — the 1200-char fix was NOT
@@ -130,7 +194,7 @@ specifically — the truncation is likely there, not in `llm_extract_rules.py`.
 
 ---
 
-### Priority 2 — Fix `split_merged_lettered_items()` to emit parent first
+### Priority 2 — Fix `split_merged_lettered_items()` to emit parent first — DONE
 
 **Problem confirmed:** v7's `split_merged_lettered_items()` replaces the parent clause
 with its children — it never emits the parent clause object. This caused Reg 13 to lose
@@ -174,7 +238,7 @@ spurious FPs (-2 FP). Net: Reg 13 should return to TP=5 (v6 level).
 
 ---
 
-### Priority 3 — Add "no phantom sub-levels" rule to `_PASS1_SYSTEM`
+### Priority 3 — Add "no phantom sub-levels" rule to `_PASS1_SYSTEM` — DONE
 
 **Problem confirmed:** v7 introduced `ICDR_17_1_a`, `ICDR_17_1_b` (phantom `(1)` level),
 `ICDR_16_1` (bare, not in gold), `ICDR_5_explanation` (missing `_1` level). The model
@@ -203,7 +267,7 @@ Also fixes `ICDR_5_1_explanation` and `ICDR_16_1_explanation` path errors.
 
 ---
 
-### Priority 4 — Move carryover hint BEFORE `reg_context` in prompt
+### Priority 4 — Move carryover hint BEFORE `reg_context` in prompt — DONE
 
 **Problem confirmed:** v7 still produces `ICDR_6_v` (pages [4,5]) instead of
 `ICDR_6_3_v`. The `reg_context` block (listing `visible_regs = {6, 7}`) appears
@@ -243,7 +307,7 @@ items (+5–8 rules).
 
 ---
 
-### Priority 5 — Confirm Fix 4a (terminal letter strip) is running
+### Priority 5 — Confirm Fix 4a (terminal letter strip) is running — DONE
 
 **Problem confirmed:** v7 still produces `ICDR_15_1_a_c`, `ICDR_15_1_a_iv_proviso`
 (path contains extra `_a` level). This means `prev_window_last_subclause` is still
@@ -273,7 +337,7 @@ code block is not being reached (wrong branch, wrong variable name). Trace and f
 
 ---
 
-### Priority 6 — Pass 2 deduplication (keep longest clause_text per rule_id)
+### Priority 6 — Pass 2 deduplication (keep longest clause_text per rule_id) — DONE
 
 **Problem confirmed:** `pass2_pre_judge.jsonl` contains multiple entries for
 `ICDR_14_1` (×2), `ICDR_5_1_a` (×2 with different texts), `ICDR_6_3_ii` (×2 from
@@ -308,7 +372,7 @@ speeds up Pass 2 (fewer calls). Zero regression risk.
 
 ---
 
-### Priority 7 — Verify `expand_detected_regs` receives `visible_reg_strings`
+### Priority 7 — Verify `expand_detected_regs` receives `visible_reg_strings` — DONE
 
 **Problem confirmed:** Reg 8 is near-completely missing in v7 (TP=1, was TP=3 in v6).
 Only `ICDR_8_explanation` appears in pass2. The main Reg 8 body and all provisos are
@@ -423,7 +487,7 @@ python scripts/llm_extract_rules.py \
     --model qwen2.5:14b-instruct \
     --window 2 --overlap 1 \
     --reg-filter 4 23 \
-    --timeout 600 \
+    --timeout 1800 \
     --debug \
     --debug-dir data/processed/debug_refactored_v8
 ```
@@ -492,5 +556,6 @@ mapping real regulatory text to executable compliance logic in the financial sec
 
 ---
 
-*Last updated: May 9, 2026*
-*Next session: Start with Priority 1 (find ALL [:300] caps) — zero risk, highest yield*
+*Last updated: Sep 5, 2026*
+*Next session (ICDR): Let cmd-wrapped v8 extract finish (`extract_final.err.log`); score + verification checks; fill v8 score row.*
+*Next session (Tax/ITA): Install `lake`/elan and re-prove adversarial without `--skip-lean`; close open composite gates in `TaxProbe.lean`; see `docs/Compliance_context.md` §0.*

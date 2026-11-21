@@ -1,14 +1,81 @@
 # Project Handoff Document
-## SEBI ICDR Automated Compliance Pipeline
-*Last updated: May 16, 2026 — Paste this at the start of a new chat to restore full context.*
+## SEBI ICDR + ITA/ITR-2 Formal Compliance Pipeline
+*Last updated: 2026-10-03 — adversarial set expanded to 17 cases (FY 2024–25); temp0+k5 robustness. ICDR v8 still paused. Decision log: `docs/decision_log/2026-10-03_adversarial-expansion-fy2024-25.md`.*
+
+---
+
+## 0. Paper Scope & Tax Demo (verified 2026-08-22; expansion 2026-10-03)
+
+**Settled decision (2026-08-22):** Paper scope freezes at Stage 4 architecture for narrative; **ITA / ITR-2 is the end-to-end demo**. Full ICDR RHP→Lean E2E is deferred. Framing: **Option B complementary** (Lean formal verdicts + LLM judge on the same structured facts). Optional frontier-model comparison not run; **local 32b skipped** (host GPU 8 GB; needs ~20 GB).
+
+**Statute year:** All adversarial thresholds are **FY 2024–25 / Finance Act 2024** (not FA 2025). State this in the paper.
+
+### Experiment (17 adversarial ITR-2 cases — 2026-10-03)
+
+| Metric | Score |
+|--------|-------|
+| Lean (predicate_mirror of `AdversarialRules.lean`) | **17/17 (100%)** |
+| Qwen2.5:14b temp=0 | **15/17 (88%)** |
+| Qwen2.5:14b k=5 majority | **15/17 (88%)** |
+| Avg k=5 consistency | **98%** |
+
+**LLM misses (consistent):** `adv_11` (12-month holding → short-term) and `adv_14_194_tds_applies` (TDS applicability). `adv_01` was correct this run (Sep 5 single-shot had missed it — variance).
+
+Source: `reports/adversarial_comparison_full.jsonl`. Lean column is `source=predicate_mirror` until `lake` re-prove. adv_14/15 split into TDS-applies + 20%-rate binary checks.
+
+### ITA ablation prior
+
+`reports/proof_results_tax_ladder.jsonl`: **25/28 proved (89.3%)**. Open composite gates: `gold_reg_6_eligible`, `gold_reg_112a_eligible`, `gold_reg_80d_eligible` (Secs 6, 112A, 80D). **Next actionable (2026-08-23):** replace `sorry` on those three theorems in `Reglib_tax/Reglib/ITA/TaxProbe.lean` via compound decompose (start with `gold_reg_6_eligible` — two conjuncts). ICDR v8 extract paused; see `docs/decision_log/2026-08-23_pause-icdr-v8-focus-tax.md`.
+
+### Gap audit (EXISTS / PARTIAL / MISSING)
+
+| Artifact | Status | Notes |
+|----------|--------|-------|
+| `scripts/generate_adversarial_taxpayers.py` | EXISTS | **17** JSON cases under `data/tax/adversarial/` (FY 2024–25) |
+| `scripts/build_adversarial_lean.py` | EXISTS | Regen instances + probe + predicate mirror |
+| `scripts/verify_one_lake.py --adversarial` | EXISTS | Uses `AdversarialProbe`; collapses pos/neg per case |
+| `scripts/llm_judge_baseline.py` | EXISTS | temp0 + k=5; default `qwen2.5:14b-instruct` |
+| `scripts/compare_lean_vs_llm.py` | EXISTS | Writes `adversarial_comparison_full.jsonl` |
+| Lean instances `Adversarial_adv_*.lean` | EXISTS | 17 instances |
+| `Reglib_tax/.../AdversarialRules.lean` | EXISTS | **Symmetric** pos + `_negated` predicates |
+| `Reglib_tax/.../AdversarialProbe.lean` | EXISTS | 17×(pos+neg) sorry theorems |
+| `Reglib_tax/.../TaxProbe.lean` | PARTIAL | Gold probe (28 thms); **not** the symmetric pair file |
+| `Reglib_tax/.../Core.lean` + `rules/Compliance.lean` | EXISTS | Taxpayer struct + eligibility |
+| `scripts/generate_gold_probe.py`, `generate_reglib.py`, `schema_to_struct.py` | EXISTS | |
+| `Reglib_itr2/.../definitions/Core.lean` | EXISTS | ITR2Filing from schema (~178 fields) |
+| `data/processed/definitions_icdr_reg2.jsonl` | EXISTS | **68** ICDR Reg 2 definition entries |
+| `reports/adversarial_comparison_full.jsonl` | EXISTS | 2026-10-03: n=17; temp0+k5 |
+| `reports/adversarial_llm_*_temp0.jsonl` / `*_k5.jsonl` | EXISTS | 14b robustness runs |
+| Frontier / 32b comparison | MISSING | 32b skipped (8 GB VRAM); no cloud API |
+| `scripts/parse_validation_rules.py` | MISSING | Claimed; not in tree |
+| `scripts/generate_itr2_predicates.py` | MISSING | Claimed; not in tree |
+| “764 Category A ITR-2 rules” | MISSING | No Category-A rule dump / count found in repo |
+
+**Ready for paper demo:** adversarial pipeline + reports are in place. **Missing for scale-up:** Category-A validation→predicate generators and a verified 764-rule corpus artifact.
+
+### Key tax commands
+
+```bash
+python scripts/generate_adversarial_taxpayers.py
+python scripts/build_adversarial_lean.py
+python scripts/llm_judge_baseline.py --models "qwen2.5:14b-instruct"
+python scripts/compare_lean_vs_llm.py --skip-lean --models "qwen2.5:14b-instruct"
+# when lake available:
+python scripts/verify_one_lake.py --adversarial --out reports/adversarial_lean_results.jsonl
+python scripts/compare_lean_vs_llm.py --models "qwen2.5:14b-instruct"
+```
+
+### Decision log
+
+Append dated decisions under `docs/decision_log/` (see README there). First entry: `docs/decision_log/2026-08-22_tax-paper-scope-and-state-audit.md`.
 
 ---
 
 ## 1. Research Goal
 
-Build the **first formally verified regulatory compliance system for financial documents**. Specifically: an end-to-end pipeline that takes a SEBI ICDR 2018 regulation PDF and an IPO filing (Red Herring Prospectus / RHP), extracts structured compliance rules from the regulation, extracts issuer data from the RHP, and produces machine-verified compliance proofs in **Lean 4**.
+Build the **first formally verified regulatory compliance system for financial documents**. Dual corpus: (1) SEBI ICDR 2018 IPO rules (extraction→schema→Lean track; full RHP E2E deferred for the paper), and (2) Income Tax Act / ITR-2 as the **working end-to-end demo** (gold probes, Lake verify, adversarial Lean vs LLM judge).
 
-This is novel because existing systems (APOLLO, Compliance-to-Code) use LLM judges or Python executors as the verification oracle. This project uses a formal proof kernel (Lean 4) — making compliance verdicts formally verifiable, not just plausible.
+Existing systems (APOLLO, Compliance-to-Code) use LLM judges or Python executors as the verification oracle. This project uses a formal proof kernel (Lean 4) — making compliance verdicts formally verifiable, not just plausible — and compares that oracle to an LLM judge at rule boundaries (Option B).
 
 **Target publication venues:** ICAIL, FinNLP, or a formal methods venue.
 
@@ -358,14 +425,8 @@ Key definitions that will change `Core.lean` significantly: `"promoter"` (Reg 2(
 
 ## 13. Where to Start Next Session
 
-**Immediate next action:** Priority 1 from the v8 work plan.
+**Paper / tax track (demo-ready):** Adversarial Lean vs LLM refreshed 2026-09-05 in `reports/adversarial_*.jsonl` (Lean 5/5, LLM 4/5, miss on adv_01). Next actionable: restore `lake` and re-prove; close the three open ITA composite gates (Secs 6, 112A, 80D); optionally frontier judge; Category-A → predicate tooling if scaling ITR-2.
 
-```bash
-grep -rn "\[:300\]\|\[:500\]\|max_chars" --include="*.py"
-```
+**ICDR extraction track:** v8 Priority code fixes are in-tree; extract+score is **blocked** on broken `.venv` / missing Ollama (see `CLAUDE.md` Current State). Next: repair Python env, start `qwen2.5:14b-instruct`, run v8 extract + `score_extraction.py`, fill the v8 score row.
 
-Find every truncation cap in the codebase. Raise to `[:1200]`. Run the scoring script. This is zero regression risk and recovers the most rules (+8 confirmed). Do not touch anything else until this is scored and confirmed.
-
-After that: Priority 2 (`split_merged_lettered_items` parent emission fix), then score again.
-
-If you want to work on the Lean side instead: run `lake build` in the `Reglib/` directory and confirm it compiles cleanly. Then try LeanCopilot on `sample_passes_reg5`. These are independent of the extraction work.
+Do not reverse paper-scope decision (ITA/ITR-2 E2E demo; ICDR full E2E deferred) without a new dated decision-log entry.
